@@ -1,0 +1,74 @@
+steps:
+  # ── Bước 1: Download .zip từ GCS ─────────────────────────
+  - name: "gcr.io/cloud-builders/gsutil"
+    id: download
+    args: ["cp", "gs://$_BUCKET_NAME/$_ZIP_FILE", "/workspace/app.zip"]
+
+  # ── Bước 2: Giải nén ──────────────────────────────────────
+  - name: "ubuntu"
+    id: unzip
+    args: ["bash", "-c", "unzip /workspace/app.zip -d /workspace/src"]
+
+  # ── Bước 3: Chạy Unit Tests ───────────────────────────────
+  - name: "python:3.11-slim"
+    id: test
+    dir: "src"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        pip install -r requirements.txt -q
+        pytest tests/ -v --tb=short
+    env:
+      - "ENVIRONMENT=test"
+
+  # ── Bước 4: Build Docker Image ────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: build
+    dir: "src"
+    args:
+      - "build"
+      - "--build-arg=APP_VERSION=$_VERSION"
+      - "-t"
+      - "$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/my-app:$_VERSION"
+      - "-t"
+      - "$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/my-app:latest"
+      - "."
+
+  # ── Bước 5: Push lên Artifact Registry ───────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    id: push
+    args:
+      - "push"
+      - "--all-tags"
+      - "$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/my-app"
+
+  # ── Bước 6: Deploy lên Cloud Run ─────────────────────────
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: deploy
+    args:
+      - "run"
+      - "deploy"
+      - "my-app"
+      - "--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/my-app:$_VERSION"
+      - "--region=$_REGION"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--set-env-vars=APP_VERSION=$_VERSION,ENVIRONMENT=production"
+      - "--memory=512Mi"
+      - "--cpu=1"
+      - "--min-instances=0"
+      - "--max-instances=10"
+      - "--quiet"
+
+substitutions:
+  _REGION: asia-southeast1
+  _REPO_NAME: myapp-repo
+  _VERSION: "0.0.0"
+  _BUCKET_NAME: ""
+  _ZIP_FILE: ""
+
+timeout: "900s"
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: "E2_MEDIUM"

@@ -1,0 +1,59 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID:  ${{ vars.GCP_PROJECT_ID }}
+  BUCKET_NAME: ${{ vars.GCP_ARTIFACT_BUCKET }}
+  REGION:      ${{ vars.GCP_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account:            ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install & Test
+        run: |
+          pip install -r requirements.txt
+          pytest tests/ -v --tb=short
+        env:
+          ENVIRONMENT: test
+
+      - name: Set version
+        id: version
+        run: echo "VERSION=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Package
+        run: |
+          zip -r app-${{ steps.version.outputs.VERSION }}.zip . \
+            --exclude="*.git*" --exclude="*__pycache__*" \
+            --exclude="*.github*" --exclude="*terraform*"
+
+      - name: Upload to GCS
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          path:        app-${{ steps.version.outputs.VERSION }}.zip
+          destination: ${{ env.BUCKET_NAME }}/releases

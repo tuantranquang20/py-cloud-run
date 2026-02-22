@@ -41,6 +41,7 @@ jobs:
           pytest tests/ -v --tb=short
         env:
           ENVIRONMENT: test
+          PYTHONPATH: ${{ github.workspace }}
 
       - name: Set version
         id: version

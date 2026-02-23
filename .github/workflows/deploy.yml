@@ -58,3 +58,4 @@ jobs:
         with:
           path:        app-${{ steps.version.outputs.VERSION }}.zip
           destination: ${{ env.BUCKET_NAME }}/releases
+          gzip: false

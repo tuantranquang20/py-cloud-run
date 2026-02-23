@@ -8,6 +8,7 @@ steps:
       - "pip install -r requirements.txt -q && pytest tests/ -v --tb=short"
     env:
       - "ENVIRONMENT=test"
+      - "PYTHONPATH=."
 
   # ── Bước 2: Build Docker Image ────────────────────────────
   - name: "gcr.io/cloud-builders/docker"

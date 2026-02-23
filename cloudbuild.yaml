@@ -77,3 +77,4 @@ timeout: "900s"
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: "E2_MEDIUM"
+  substitutionOption: "ALLOW_LOOSE"
